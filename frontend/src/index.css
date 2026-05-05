@@ -1,0 +1,13 @@
+@import "tailwindcss";
+@import "react-datepicker/dist/react-datepicker.css";
+
+body {
+  margin: 0;
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+#root {
+  min-height: 100vh;
+}
