@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import { getDb } from './db';
 import flightsRouter from './routes/flights';
 import pricesRouter from './routes/prices';
@@ -24,7 +25,14 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend running on http://localhost:${PORT}`);
+// Serve built frontend static files
+const frontendDist = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(frontendDist));
+app.get('/{*path}', (_req, res) => {
+  res.sendFile(path.join(frontendDist, 'index.html'));
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`App running on http://localhost:${PORT}`);
   startScheduler();
 });

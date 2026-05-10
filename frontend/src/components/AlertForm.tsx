@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { createAlert, getAlerts, deleteAlert } from '../api/client';
+import { createAlert, deleteAlert } from '../api/client';
 import type { Alert } from '../api/client';
 import type { SearchParams } from './FlightSearch';
 
