@@ -1,74 +1,61 @@
-# Vietnam Flight Price Tracker
+# CLAUDE.md
 
-Full-stack app that tracks daily flight prices from Australia → Vietnam, shows price history charts, and sends email alerts when fares drop below a threshold.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Commands
+
+### Backend (`cd backend`)
+```bash
+npm install
+npm run dev      # ts-node dev server on :3001
+npm run build    # tsc → dist/
+npm start        # run compiled dist/index.js
+```
+
+### Frontend (`cd frontend`)
+```bash
+npm install
+npm run dev      # Vite dev server on :5173 (proxies /api → :3001)
+npm run build    # tsc + vite build → dist/
+npm run lint     # ESLint
+```
+
+### Production
+Build the frontend first — the backend serves `frontend/dist` as static files:
+```bash
+cd frontend && npm run build
+cd ../backend && npm start
+```
+
+There are no automated tests.
 
 ## Architecture
 
 ```
-backend/   Node.js + Express + TypeScript + SQLite
-frontend/  React + TypeScript + Vite + Tailwind CSS + Recharts
+backend/   Node.js + Express 5 + TypeScript + SQLite (better-sqlite3)
+frontend/  React 19 + TypeScript + Vite + Tailwind CSS v4 + Recharts
 ```
 
-## Setup
+**Backend entry:** `backend/src/index.ts` — mounts three routers (`/api/flights`, `/api/prices`, `/api/alerts`), initialises the DB singleton, starts the cron scheduler, and serves the frontend `dist/` as a fallback SPA catch-all.
 
-### 1. Backend
+**DB layer:** `backend/src/db/index.ts` — singleton via module-level `let db`. Schema is applied inline with `CREATE TABLE IF NOT EXISTS` on first call. Two tables: `price_snapshots` (daily cheapest fare per route/date) and `alerts` (user subscriptions). DB file at `backend/data/tracker.db` (auto-created).
 
-```bash
-cd backend
-cp .env.example .env
-# Fill in AMADEUS_CLIENT_ID, AMADEUS_CLIENT_SECRET, and SMTP_* in .env
-npm install
-npm run dev        # development (ts-node)
-npm run build      # compile to dist/
-npm start          # run compiled output
+**Amadeus service:** `backend/src/services/amadeus.ts` — lazy-initialised client, calls `flightOffersSearch.get()` with `currencyCode: 'AUD'`. Free tier limit: 2,000 calls/month — avoid hitting it in loops.
+
+**Scheduler:** `backend/src/services/scheduler.ts` — `node-cron` job at `0 20 * * *` UTC (06:00 AEST). Fetches only routes with active alerts, stores snapshots, sends SMTP emails for triggered thresholds. The `runDailyJob` function is exported for manual invocation.
+
+**Frontend data layer:** `frontend/src/api/client.ts` — all typed fetch wrappers live here. During dev, Vite proxies `/api` to `localhost:3001`.
+
+## Environment variables
+
+Create `backend/.env` from this template:
 ```
-
-Runs on **http://localhost:3001**
-
-### 2. Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev        # Vite dev server with proxy to :3001
-npm run build      # production build to dist/
+AMADEUS_CLIENT_ID=
+AMADEUS_CLIENT_SECRET=
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+PORT=3001          # optional, defaults to 3001
+DB_PATH=           # optional, defaults to backend/data/tracker.db
 ```
-
-Runs on **http://localhost:5173**
-
-## API Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/health` | Health check |
-| GET | `/api/flights?origin=SYD&destination=SGN&departDate=YYYY-MM-DD[&returnDate=YYYY-MM-DD]` | Search live flight prices |
-| GET | `/api/prices/history?origin=...&destination=...&departDate=...` | Price history (last 30 days) |
-| GET | `/api/prices/lowest?origin=...&destination=...&departDate=...` | Min/max/avg stats |
-| POST | `/api/alerts` | Create a price alert `{ email, origin, destination, departDate, returnDate?, thresholdAud }` |
-| GET | `/api/alerts` | List active alerts |
-| DELETE | `/api/alerts/:id` | Deactivate an alert |
-
-## Supported airports
-
-**Australian origins:** SYD, MEL, BNE, PER, ADL  
-**Vietnam destinations:** SGN (Ho Chi Minh City), HAN (Hanoi), DAD (Da Nang)
-
-## Daily scheduler
-
-The backend runs a `node-cron` job every day at **06:00 AEST** (20:00 UTC) that:
-1. Fetches the cheapest flight for every route that has an active alert
-2. Stores a price snapshot in SQLite
-3. Sends an email via SMTP if the price is at or below any matching alert threshold
-
-## Data storage
-
-SQLite database at `backend/data/tracker.db` (auto-created on first run).
-
-Tables:
-- `price_snapshots` — daily cheapest price per route/date
-- `alerts` — user-configured price alert subscriptions
-
-## External dependencies
-
-- **Amadeus API** (free tier): [developers.amadeus.com](https://developers.amadeus.com) — 2,000 calls/month
-- **SMTP provider**: Any standard SMTP service (Gmail with App Password, Mailgun, SendGrid, etc.)
